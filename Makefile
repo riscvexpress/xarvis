@@ -57,3 +57,20 @@ share_python:
 	fi
 
 .PHONY: share_python
+
+## share the dataset with the projects here ##
+# a project calls: make -C <this directory> share_dataset DATASET_SHARE_DIR=<directory of the project>
+# 'make setup_path DATASET_DIR=${DATASET_HOME}' runs in DATASET_SHARE_DIR (it makes rvx_config_path.mh there)
+DATASET_HOME?=${CURDIR}/dataset
+
+share_dataset:
+	@if [ -z "${DATASET_SHARE_DIR}" ]; then \
+	  echo "[FAIL] DATASET_SHARE_DIR is required: make share_dataset DATASET_SHARE_DIR=<directory of the project>"; exit 1; \
+	fi
+	@if [ ! -d "${DATASET_HOME}" ]; then \
+	  echo "[FAIL] ${DATASET_HOME} is NOT found"; exit 1; \
+	fi
+	@echo "make setup_path in ${DATASET_SHARE_DIR}"
+	@MAKEFLAGS= ${MAKE} --no-print-directory -C "${DATASET_SHARE_DIR}" setup_path "DATASET_DIR=${DATASET_HOME}"
+
+.PHONY: share_dataset
