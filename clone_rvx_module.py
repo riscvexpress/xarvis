@@ -120,6 +120,19 @@ def clone(name, url, commit, extra_source_path=None):
     return 0
 
 
+def pull(name, url, commit, extra_source_path=None):
+    if is_branch(commit):
+        return commit if clone(name, url, commit, extra_source_path) == 0 else None
+    result = subprocess.run(['git', 'ls-remote', url, 'HEAD'], stdout=subprocess.PIPE, universal_newlines=True)
+    latest = result.stdout.split()[0][:7] if result.returncode == 0 and result.stdout.split() else ''
+    if not latest:
+        log(f'[FAIL] the latest commit of {url} is NOT found')
+        return None
+    new_commit = commit if latest.startswith(commit.lower()[:7]) else latest
+    log(f'{name} {commit} -> {new_commit}' if new_commit != commit else f'{name} {commit} (no update)')
+    return new_commit if clone(name, url, new_commit, extra_source_path) == 0 else None
+
+
 def record_user(name, commit, user_path, user_url):
     user_path = str(Path(user_path).resolve())
     user_dict = json.loads(USER_FILE.read_text(encoding='utf8')) if USER_FILE.is_file() else {}
@@ -159,17 +172,23 @@ if __name__ == '__main__':
     parser.add_argument('-commit', required=True, help='commit (or branch)')
     parser.add_argument('-url', help='repository url (required unless -path_only)')
     parser.add_argument('-path_only', action='store_true', help='print the directory without cloning')
+    parser.add_argument('-pull', action='store_true', help='move to the latest commit of the default branch (a new directory), and print it')
     parser.add_argument('-source', help='a clone of the module to copy from when none is here')
     parser.add_argument('-user_path', help='top directory of the repository that uses the module')
     parser.add_argument('-user_url', default='', help='git url of the repository that uses the module')
     args = parser.parse_args()
+    commit = args.commit
     if not args.path_only:
         if not args.url:
             parser.error('-url is required unless -path_only')
-        returncode = clone(args.name, args.url, args.commit, Path(args.source).resolve() if args.source else None)
-        if returncode != 0:
-            sys.exit(returncode)
+        source_path = Path(args.source).resolve() if args.source else None
+        if args.pull:
+            commit = pull(args.name, args.url, args.commit, source_path)
+            if not commit:
+                sys.exit(1)
+        elif clone(args.name, args.url, args.commit, source_path) != 0:
+            sys.exit(1)
         if args.user_path:
-            record_user(args.name, args.commit, args.user_path, args.user_url)
+            record_user(args.name, commit, args.user_path, args.user_url)
             add_exclude(args.user_path)
-    print(get_module_path(args.name, args.commit))
+    print(get_module_path(args.name, commit))
